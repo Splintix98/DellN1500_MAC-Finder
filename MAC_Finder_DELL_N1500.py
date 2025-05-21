@@ -307,7 +307,10 @@ def parse_vlan_info(output_show_vlan):
     # VLAN ID  Name                             Type    Ports
     # -------  -------------------------------- ------- -------------------
     # 1        default                          Default Gi1/0/1-24,Po1-8
-    vlan_line_re = re.compile(r"^\s*(\d+)\s+([\w\s-]+?)\s+.*") # Adjusted regex to handle multi-line port lists
+    # Adjusted regex to be more robust for various name formats and multi-line port lists.
+    # It looks for VLAN ID, then a non-greedy name, followed by at least two spaces,
+    # and then an indicator of the Ports or Type column (e.g., Gi, Po, Te, Static, Default).
+    vlan_line_re = re.compile(r"^\s*(\d+)\s+([\w\s\/.-]+?)\s{2,}(?:[GPTg][ioe]|\w+)")
     for line in lines:
         line = line.rstrip() # Keep leading spaces for alignment if needed, but strip trailing
         if not header_found:
@@ -320,7 +323,7 @@ def parse_vlan_info(output_show_vlan):
         match = vlan_line_re.match(line)
         if match:
             vlan_id = match.group(1)
-            vlan_name = match.group(2).strip()
+            vlan_name = match.group(2).strip() # Ensure name is stripped of any leading/trailing whitespace from the capture group
             if vlan_id.isdigit():
                 vlans[int(vlan_id)] = vlan_name
     return vlans
