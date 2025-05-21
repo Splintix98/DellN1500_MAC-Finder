@@ -310,7 +310,8 @@ def parse_vlan_info(output_show_vlan):
     # Adjusted regex to be more robust for various name formats and multi-line port lists.
     # It looks for VLAN ID, then a non-greedy name, followed by at least two spaces,
     # and then an indicator of the Ports or Type column (e.g., Gi, Po, Te, Static, Default).
-    vlan_line_re = re.compile(r"^\s*(\d+)\s+([\w\s\/.-]+?)\s{2,}(?:[GPTg][ioe]|\w+)")
+    # This version tries to capture the ID, then a non-greedy name, followed by at least two spaces.
+    vlan_line_re = re.compile(r"^\s*(\d+)\s+(.+?)\s{2,}")
     for line in lines:
         line = line.rstrip() # Keep leading spaces for alignment if needed, but strip trailing
         if not header_found:
