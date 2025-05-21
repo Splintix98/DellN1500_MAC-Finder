@@ -301,32 +301,91 @@ def get_port_from_output(output):
 port_id_pattern = re.compile(r"^(Gi|Te|Po)\d+((/\d+)?/\d+|\d+)$") # Gi1/0/1, Te1/0/1, Po1, Gi1/0/10, Po12
 
 def parse_vlan_info(output_show_vlan):
+    """
+    Parses the output of 'show vlan' to extract VLAN IDs and Names.
+    Uses an iterative approach based on column positions determined from the header/separator lines.
+    """
     vlans = {} # id -> name
     lines = output_show_vlan.splitlines()
     header_found = False
+    separator_line = None
+    data_lines_start_index = -1
+
+    # Find header and separator lines to determine column positions
     # VLAN ID  Name                             Type    Ports
     # -------  -------------------------------- ------- -------------------
     # 1        default                          Default Gi1/0/1-24,Po1-8
-    # Adjusted regex to be more robust for various name formats and multi-line port lists.
-    # It looks for VLAN ID, then a non-greedy name, followed by at least two spaces,
-    # and then an indicator of the Ports or Type column (e.g., Gi, Po, Te, Static, Default).
-    # This version tries to capture the ID, then a non-greedy name, followed by at least two spaces.
-    vlan_line_re = re.compile(r"^\s*(\d+)\s+(.+?)\s{2,}")
     for line in lines:
         line = line.rstrip() # Keep leading spaces for alignment if needed, but strip trailing
         if not header_found:
             if "VLAN ID" in line and "Name" in line and "Type" in line:
                 header_found = True
             continue
-        if not line or "-------" in line: # Skip empty lines or separator
-            continue
+        if header_found and "-------" in line:
+            separator_line = line
+            data_lines_start_index = lines.index(line) + 1
+            break # Found header and separator, stop searching
 
-        match = vlan_line_re.match(line)
-        if match:
-            vlan_id = match.group(1)
-            vlan_name = match.group(2).strip() # Ensure name is stripped of any leading/trailing whitespace from the capture group
-            if vlan_id.isdigit():
-                vlans[int(vlan_id)] = vlan_name
+    if not header_found or not separator_line or data_lines_start_index == -1:
+        # Could not find the expected header/separator format
+        print("DEBUG: Could not find VLAN header or separator.")
+        return {} # Return empty dict, indicating failure to parse
+
+    # Determine column start indices based on the separator line
+    # Look for at least two spaces separating the column separators (---)
+    name_start_index = -1
+    ports_start_index = -1
+    type_start_index = -1
+
+    # Find the positions of the column separators in the separator line
+    vlan_sep_end = separator_line.find("-----") + 5
+    name_sep_end = separator_line.find("---------------") + 15
+    ports_sep_end = separator_line.find("-------------") + 13
+
+    # Find the start of the next column by looking for >=2 spaces after the previous separator ends
+    match_name_sep = re.search(r"\s{2,}", separator_line[vlan_sep_end:])
+    if match_name_sep: name_start_index = vlan_sep_end + match_name_sep.start() + len(match_name_sep.group(0))
+
+    match_ports_sep = re.search(r"\s{2,}", separator_line[name_sep_end:])
+    if match_ports_sep: ports_start_index = name_sep_end + match_ports_sep.start() + len(match_ports_sep.group(0))
+
+    match_type_sep = re.search(r"\s{2,}", separator_line[ports_sep_end:])
+    if match_type_sep: type_start_index = ports_sep_end + match_type_sep.start() + len(match_type_sep.group(0))
+
+    if name_start_index == -1 or ports_start_index == -1 or type_start_index == -1:
+        print("DEBUG: Could not determine column positions from separator line.")
+        print(f"DEBUG: Separator line: '{separator_line}'")
+        print(f"DEBUG: name_start_index={name_start_index}, ports_start_index={ports_start_index}, type_start_index={type_start_index}")
+        return {} # Return empty dict, indicating failure to parse
+
+    # Regex to find VLAN ID at the start of a line (only digits followed by space)
+    vlan_id_line_re = re.compile(r"^\s*(\d+)\s+")
+
+    # Process data lines starting from the line after the separator
+    for i in range(data_lines_start_index, len(lines)):
+        line = lines[i]
+        # Check if the line starts with a VLAN ID
+        match_id = vlan_id_line_re.match(line)
+
+        if match_id:
+            # This line starts a new VLAN entry
+            vlan_id_str = match_id.group(1)
+            try:
+                vlan_id = int(vlan_id_str)
+            except ValueError:
+                # Should not happen with the regex, but as a safeguard
+                continue
+
+            # Extract the name using the determined column indices
+            # The name is between the end of the VLAN ID part and the start of the Ports column
+            # Ensure slicing doesn't go beyond the line length
+            name_end_index = min(len(line), ports_start_index)
+            vlan_name = line[name_start_index:name_end_index].strip()
+
+            vlans[vlan_id] = vlan_name
+        # else: This line does not start with a VLAN ID, assume it's a continuation
+        # of the Ports list from the previous VLAN entry. Ignore for ID/Name mapping.
+
     return vlans
 
 def display_vlan_names(switch_ip, username, password):
@@ -336,8 +395,10 @@ def display_vlan_names(switch_ip, username, password):
         print(f"Error fetching VLANs from {switch_ip}: {error}")
         return
 
-    if not output:
+    if not output or output.strip() == "":
         print(f"No output received for 'show vlan' from {switch_ip}.")
+        if "debug" in sys.argv:
+             print("Raw output from 'show vlan':\n", output)
         return
 
     vlan_info = parse_vlan_info(output)
@@ -345,7 +406,7 @@ def display_vlan_names(switch_ip, username, password):
         print("Could not parse VLAN information or no VLANs found.")
         if "debug" in sys.argv:
             print("Raw output from 'show vlan':\n", output)
-        return
+            return
 
     print("\nAvailable VLANs on the switch:")
     for vlan_id, name in sorted(vlan_info.items()):
