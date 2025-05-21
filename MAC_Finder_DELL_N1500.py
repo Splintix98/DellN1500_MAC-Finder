@@ -12,6 +12,7 @@ from switch_config import switch_inventory # Import switch_inventory from config
 # - add the functionality to enter multiple MAC addresses simultaneously to let the script search the switches for those all at once
 #     - output a summary after the search has finished
 #
+
 ##############################
 
 
@@ -39,6 +40,9 @@ RED = '\033[91m'
 BLUE = '\033[94m'
 MAGENTA = '\033[95m'
 RESET = '\033[0m' # Reset to default color
+
+# Global variable to control debug mode
+debug_mode_enabled = False
 
 
 # This function is not really in use, it was just a test to get very long outputs to work
@@ -215,8 +219,8 @@ def exec_ssh_command(command, switch_IP, username, password):
                  cleaned_lines.append(line_content)
 
         final_cleaned_output = '\n'.join(cleaned_lines).strip()
-        # print(f"DEBUG: Raw output for '{command.strip()}' on {get_switch_identifier(switch_IP, switch_details_by_ip)}:\n{full_output}")
-        # print(f"DEBUG: Cleaned output for '{command.strip()}' on {get_switch_identifier(switch_IP, switch_details_by_ip)}:\n{final_cleaned_output}")
+        if debug_mode_enabled: print(f"{BLUE}DEBUG: Raw output for '{command.strip()}' on {get_switch_identifier(switch_IP, switch_details_by_ip)}:{RESET}\n{full_output}")
+        if debug_mode_enabled: print(f"{BLUE}DEBUG: Cleaned output for '{command.strip()}' on {get_switch_identifier(switch_IP, switch_details_by_ip)}:{RESET}\n{final_cleaned_output}")
         return final_cleaned_output, None
 
     except Exception as e:
@@ -257,7 +261,7 @@ def exec_ssh_config_commands(config_commands, switch_IP, username, password):
         read_channel_buffer() # Capture (config)# prompt and any messages
 
         for i, cmd in enumerate(config_commands):
-            # print(f"DEBUG: Sending config command to {get_switch_identifier(switch_IP, switch_details_by_ip)}: {cmd}")
+            if debug_mode_enabled: print(f"{BLUE}DEBUG: Sending config command to {get_switch_identifier(switch_IP, switch_details_by_ip)}: {cmd}{RESET}")
             channel.send(cmd + "\n")
             # Wait slightly longer after the last command or for commands that might take time
             sleep_time = 0.7 if i == len(config_commands) -1 else 0.4
@@ -276,13 +280,13 @@ def exec_ssh_config_commands(config_commands, switch_IP, username, password):
         ]
         for pattern in error_patterns:
             if re.search(pattern, full_debug_output, re.IGNORECASE):
-                # print(f"DEBUG: Config error detected on {switch_IP}. Full output:\n{full_debug_output}")
+                if debug_mode_enabled: print(f"{BLUE}DEBUG: Config error detected on {get_switch_identifier(switch_IP, switch_details_by_ip)}. Full output:{RESET}\n{full_debug_output}")
                 # Try to extract a more specific error message part from the output
                 error_line_match = re.search(f".*({pattern.replace('% ', '')}).*", full_debug_output, re.IGNORECASE | re.MULTILINE)
                 specific_error = error_line_match.group(0).strip() if error_line_match else "Unknown error from output."
                 return full_debug_output, f"{RED}Configuration error on {get_switch_identifier(switch_IP, switch_details_by_ip)}: '{specific_error}'{RESET}"
-        
-        # print(f"DEBUG: Config commands successful on {switch_IP}. Full output:\n{full_debug_output}")
+
+        if debug_mode_enabled: print(f"{BLUE}DEBUG: Config commands successful on {get_switch_identifier(switch_IP, switch_details_by_ip)}. Full output:{RESET}\n{full_debug_output}")
         return full_debug_output, None
 
     except Exception as e:
@@ -391,8 +395,8 @@ def display_vlan_names(switch_ip, username, password):
     if error:
         print(f"{RED}Error fetching VLANs from {get_switch_identifier(switch_ip, switch_details_by_ip)}: {error}{RESET}")
         return # Exit the function on error
-
-    if not output or output.strip() == "" :
+    
+    if not output or output.strip() == "":
         print(f"No output received for 'show vlan' from {switch_ip}.")
     print(f"\n--- VLAN Configuration on {switch_ip} ---")
     print(output)
@@ -601,7 +605,7 @@ def mac_search_workflow(switch_IPs, username, password):
                 else: # Last switch checked
                     return # Found on last switch, end search
 
-            elif "debug" in sys.argv and output:
+            elif debug_mode_enabled and output:
                 print(f"{BLUE}Debug output for switch {get_switch_identifier(ip, switch_details_by_ip)} (MAC {formatted_mac}):{RESET}\n{output}")
 
     if not device_found:
@@ -637,7 +641,16 @@ def main_menu(switch_IPs_list, user, passwd):
         print("2. Configure VLANs on a port")
         print("3. Show VLAN configuration of a switch")
         print("4. Show Switch Inventory")
-        print("5. Exit")
+        
+        # Display current debug mode status in the menu
+        debug_status = f"{GREEN}ON{RESET}" if debug_mode_enabled else f"{RED}OFF{RESET}"
+        print(f"5. Toggle Debug Mode ({debug_status})")
+        
+        print("6. Exit")
+        
+        # Adjust available choices based on menu options
+        valid_choices = ['1', '2', '3', '4', '5', '6']
+        
         choice = input("Enter your choice: ")
 
         if choice == '1':
@@ -669,8 +682,15 @@ def main_menu(switch_IPs_list, user, passwd):
                 continue
             display_vlan_names(target_ip_show, user, passwd)
         elif choice == '4':
+            # Pass the global switch_inventory list
             display_switch_inventory(switch_inventory)
         elif choice == '5':
+            # Toggle debug mode
+            global debug_mode_enabled
+            debug_mode_enabled = not debug_mode_enabled
+            status = "enabled" if debug_mode_enabled else "disabled"
+            print(f"{BLUE}Debug mode is now {status}.{RESET}")
+        elif choice == '6':
             print("Exiting.")
             sys.exit()
         else:
@@ -679,6 +699,12 @@ def main_menu(switch_IPs_list, user, passwd):
 
 
 if __name__ == "__main__":
+    # Check if debug mode was enabled via command line initially
+    # This allows starting with debug enabled if desired
+    if "debug" in sys.argv:
+        debug_mode_enabled = True
+        sys.argv.remove("debug") # Remove it so it doesn't interfere later
+
     username = "admin"
 
     # get password once from user and store encrypted for runtime
