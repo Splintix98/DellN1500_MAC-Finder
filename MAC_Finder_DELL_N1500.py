@@ -307,7 +307,7 @@ def parse_vlan_info(output_show_vlan):
     # VLAN ID  Name                             Type    Ports
     # -------  -------------------------------- ------- -------------------
     # 1        default                          Default Gi1/0/1-24,Po1-8
-    vlan_line_re = re.compile(r"^\s*(\d+)\s+([\w\s-]+?)\s{2,}\w+")
+    vlan_line_re = re.compile(r"^\s*(\d+)\s+([\w\s-]+?)\s+.*") # Adjusted regex to handle multi-line port lists
     for line in lines:
         line = line.rstrip() # Keep leading spaces for alignment if needed, but strip trailing
         if not header_found:
