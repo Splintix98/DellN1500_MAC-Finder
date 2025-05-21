@@ -11,6 +11,9 @@ from switch_config import switch_inventory # Import switch_inventory from config
 #
 # - add the functionality to enter multiple MAC addresses simultaneously to let the script search the switches for those all at once
 #     - output a summary after the search has finished
+# - parallelize
+# - add function to output all macs connected to switch
+# - add basic networking functions like pinging and querying for hostname
 #
 
 ##############################
