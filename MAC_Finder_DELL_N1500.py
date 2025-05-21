@@ -717,7 +717,7 @@ if __name__ == "__main__":
     switch_details_by_ip = {}
     queryable_switch_ips = []
     for s_info in switch_inventory:
-        if s_info.get('ip') and s_info['ip'] != 'no IP set':
+        if s_info.get('ip') and s_info['query'] == 'yes':
             switch_details_by_ip[s_info['ip']] = s_info
             queryable_switch_ips.append(s_info['ip'])
 
