@@ -589,14 +589,35 @@ def mac_search_workflow(switch_IPs, username, password):
     print(f"Switches checked: {', '.join(switches_checked)}")
 
 
+def display_switch_inventory(inventory_data):
+    """Displays the switch inventory information in a formatted table."""
+    if not inventory_data:
+        print("No switch inventory data available.")
+        return
+
+    print("\nSwitch Inventory:")
+    print("--------------------------------------------------------------------------------------------------------------------")
+    print(f"{'IP Address':<18} | {'Location':<15} | {'Rack/Details':<20} | {'Model':<15} | {'Notes':<40}")
+    print("--------------------------------------------------------------------------------------------------------------------")
+    for switch in inventory_data:
+        ip = switch.get('ip', 'N/A')
+        location = switch.get('location', '')
+        rack_details = switch.get('rack_details', '')
+        model = switch.get('model', '')
+        notes = switch.get('notes', '')
+        print(f"{ip:<18} | {location:<15} | {rack_details:<20} | {model:<15} | {notes:<40}")
+    print("--------------------------------------------------------------------------------------------------------------------")
+
+
 def main_menu(switch_IPs_list, user, passwd):
     while True:
         print("\nDell N1500 MAC Finder & VLAN Configurator")
         print("------------------------------------------")
         print("1. Find MAC address")
         print("2. Configure VLANs on a port")
-        print("3. Show VLAN names on a switch")
-        print("4. Exit")
+        print("3. Show VLAN configuration of a switch")
+        print("4. Show Switch Inventory")
+        print("5. Exit")
         choice = input("Enter your choice: ")
 
         if choice == '1':
@@ -620,11 +641,32 @@ def main_menu(switch_IPs_list, user, passwd):
                 continue
             display_vlan_names(target_ip_show, user, passwd)
         elif choice == '4':
+            display_switch_inventory(switch_inventory)
+        elif choice == '5':
             print("Exiting.")
             sys.exit()
         else:
             print("Invalid choice. Please try again.")
         print("--------------------------------------------------")
+
+
+# Define switch inventory data
+switch_inventory = [
+    {'ip': '192.168.23.31', 'location': 'Serverraum', 'rack_details': '1', 'model': 'Dell N1548P', 'notes': ''},
+    {'ip': '192.168.23.32', 'location': 'Serverraum', 'rack_details': '2', 'model': 'Dell N1548P', 'notes': ''},
+    {'ip': '192.168.23.33', 'location': 'Serverraum', 'rack_details': '3', 'model': 'Dell N1548P', 'notes': ''},
+    {'ip': '192.168.23.34', 'location': 'Serverraum', 'rack_details': '4', 'model': 'Dell N1548P', 'notes': ''},
+    {'ip': '192.168.23.35', 'location': 'Serverraum', 'rack_details': '5', 'model': 'Dell N1548P', 'notes': ''},
+    {'ip': '192.168.23.38', 'location': 'Verwaltung', 'rack_details': 'Heizungsraum', 'model': 'Dell N1524P', 'notes': ''},
+    {'ip': '192.168.23.39', 'location': 'Academy', 'rack_details': 'Medienraum EG', 'model': 'Dell N1548P', 'notes': ''},
+    {'ip': '192.168.23.40', 'location': 'Fertigung', 'rack_details': 'Verteiler 1.1', 'model': 'Dell N1548P', 'notes': 'oberer Switch Dispo-Büro'},
+    {'ip': '192.168.23.41', 'location': 'Fertigung', 'rack_details': 'Verteiler 1.2', 'model': 'Dell N1548P', 'notes': 'unterer Switch Dispo-Büro'},
+    {'ip': '192.168.23.42', 'location': 'Fertigung', 'rack_details': 'Verteiler 2', 'model': 'Dell N1548P', 'notes': 'hinter der Beschichtung südl. Aussenwand'},
+    {'ip': '192.168.23.43', 'location': 'Fertigung', 'rack_details': 'Verteiler 3.1', 'model': 'Dell N1548P', 'notes': 'Versand-Halle Mitte'},
+    {'ip': 'no IP set', 'location': 'Fertigung', 'rack_details': 'Verteiler 3.2', 'model': 'Dell N1524P', 'notes': 'Versand-Halle Mitte'},
+    {'ip': '192.168.23.44', 'location': 'Fertigung', 'rack_details': 'Verteiler 4', 'model': 'Dell N1548P', 'notes': 'Magazin unter der Decke'},
+    {'ip': '192.168.23.49', 'location': 'Fertigung', 'rack_details': 'SmartBunker', 'model': 'Dell N1548P', 'notes': 'SmartBunker'},
+]
 
 if __name__ == "__main__":
     # define your switches that you want to be checked here as a string array
