@@ -19,3 +19,4 @@ switch_inventory = [
     {'ip': '192.168.23.49', 'location': 'Fertigung', 'rack_details': 'SmartBunker', 'model': 'Dell N1548P', 'query': 'yes', 'notes': 'SmartBunker'},
 ]
 
+# IPs from this list (excluding 'query' == 'no') will be used for operations 
