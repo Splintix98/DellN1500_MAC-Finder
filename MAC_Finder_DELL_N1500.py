@@ -634,6 +634,8 @@ def display_switch_inventory(inventory_data):
 
 
 def main_menu(switch_IPs_list, user, passwd):
+    global debug_mode_enabled
+
     while True:
         print("\nDell N1500 MAC Finder & VLAN Configurator")
         print("------------------------------------------")
@@ -686,7 +688,6 @@ def main_menu(switch_IPs_list, user, passwd):
             display_switch_inventory(switch_inventory)
         elif choice == '5':
             # Toggle debug mode
-            global debug_mode_enabled
             debug_mode_enabled = not debug_mode_enabled
             status = "enabled" if debug_mode_enabled else "disabled"
             print(f"{BLUE}Debug mode is now {status}.{RESET}")
