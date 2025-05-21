@@ -3,6 +3,7 @@ import time
 import getpass
 import sys
 import re
+import os # Import os module to check for Windows and potentially enable ANSI codes
 
 
 ############ TODO ############
@@ -26,6 +27,17 @@ import re
 # show vlan
 #
 ###############################################
+
+# --- ANSI Color Codes ---
+# Check if running on Windows and enable ANSI escape codes if necessary (for older Windows versions)
+if os.name == 'nt':
+    os.system('') # Enables ANSI escape codes on Windows 10+
+
+GREEN = '\033[92m'
+RED = '\033[91m'
+BLUE = '\033[94m'
+MAGENTA = '\033[95m'
+RESET = '\033[0m' # Reset to default color
 
 
 # This function is not really in use, it was just a test to get very long outputs to work
@@ -105,6 +117,14 @@ def ssh_test(ip, username, password):
         return str(e), None
     
 
+def get_switch_identifier(ip, switch_details_map):
+    """Returns a formatted string for switch identification (IP, Location, Rack)."""
+    details = switch_details_map.get(ip)
+    if details:
+        return f"{MAGENTA}{ip}{RESET} ({details.get('location', 'N/A')} - {details.get('rack_details', 'N/A')})"
+    return f"{MAGENTA}{ip}{RESET}"
+
+
 # connect to the switch via SSH and the previously specified username and password
 # execute the command
 # get all the output
@@ -114,7 +134,7 @@ def exec_ssh_command(command, switch_IP, username, password):
         ssh_client = paramiko.SSHClient()
         ssh_client.load_system_host_keys()
         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        # Increased timeout for connect
+        # Increased timeout for connect and banner
         ssh_client.connect(switch_IP, port=22, username=username, password=password, timeout=20, banner_timeout=20)
 
         channel = ssh_client.invoke_shell(width=200, height=1000) # Set large term size
@@ -194,12 +214,12 @@ def exec_ssh_command(command, switch_IP, username, password):
                  cleaned_lines.append(line_content)
 
         final_cleaned_output = '\n'.join(cleaned_lines).strip()
-        # print(f"DEBUG: Raw output for '{command.strip()}' on {switch_IP}:\n{full_output}")
-        # print(f"DEBUG: Cleaned output for '{command.strip()}' on {switch_IP}:\n{final_cleaned_output}")
+        # print(f"DEBUG: Raw output for '{command.strip()}' on {get_switch_identifier(switch_IP, switch_details_by_ip)}:\n{full_output}")
+        # print(f"DEBUG: Cleaned output for '{command.strip()}' on {get_switch_identifier(switch_IP, switch_details_by_ip)}:\n{final_cleaned_output}")
         return final_cleaned_output, None
 
     except Exception as e:
-        # print(f"Error in exec_ssh_command for {switch_IP} with command {command}: {e}")
+        # print(f"Error in exec_ssh_command for {get_switch_identifier(switch_IP, switch_details_by_ip)} with command {command}: {e}")
         return "", f"SSH/command execution error: {str(e)}"
 
 
@@ -208,7 +228,7 @@ def exec_ssh_config_commands(config_commands, switch_IP, username, password):
         ssh_client = paramiko.SSHClient()
         ssh_client.load_system_host_keys()
         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh_client.connect(switch_IP, port=22, username=username, password=password, timeout=20, banner_timeout=20)
+        ssh_client.connect(switch_IP, port=22, username=username, password=password, timeout=20, banner_timeout=20) # Increased timeout
 
         channel = ssh_client.invoke_shell(width=200, height=1000)
 
@@ -236,7 +256,7 @@ def exec_ssh_config_commands(config_commands, switch_IP, username, password):
         read_channel_buffer() # Capture (config)# prompt and any messages
 
         for i, cmd in enumerate(config_commands):
-            # print(f"DEBUG: Sending config command to {switch_IP}: {cmd}")
+            # print(f"DEBUG: Sending config command to {get_switch_identifier(switch_IP, switch_details_by_ip)}: {cmd}")
             channel.send(cmd + "\n")
             # Wait slightly longer after the last command or for commands that might take time
             sleep_time = 0.7 if i == len(config_commands) -1 else 0.4
@@ -256,11 +276,11 @@ def exec_ssh_config_commands(config_commands, switch_IP, username, password):
         for pattern in error_patterns:
             if re.search(pattern, full_debug_output, re.IGNORECASE):
                 # print(f"DEBUG: Config error detected on {switch_IP}. Full output:\n{full_debug_output}")
-                # Try to extract a more specific error message part
+                # Try to extract a more specific error message part from the output
                 error_line_match = re.search(f".*({pattern.replace('% ', '')}).*", full_debug_output, re.IGNORECASE | re.MULTILINE)
                 specific_error = error_line_match.group(0).strip() if error_line_match else "Unknown error from output."
-                return full_debug_output, f"Configuration error: '{specific_error}'"
-
+                return full_debug_output, f"{RED}Configuration error on {get_switch_identifier(switch_IP, switch_details_by_ip)}: '{specific_error}'{RESET}"
+        
         # print(f"DEBUG: Config commands successful on {switch_IP}. Full output:\n{full_debug_output}")
         return full_debug_output, None
 
@@ -282,7 +302,7 @@ def format_mac_address(mac):
         formatted_mac = f"{mac[:4]}.{mac[4:8]}.{mac[8:]}"
         return formatted_mac
     else:
-        print("The provided MAC address is not in the correct format.")
+        print(f"{RED}Error: The provided MAC address is not in the correct format.{RESET}")
         return None
     
 
@@ -295,7 +315,6 @@ def get_port_from_output(output):
         print(f"Port found using regex pattern: {port}")
         return port
     else:
-        print("No port found in output.")
         return
     
 port_id_pattern = re.compile(r"^(Gi|Te|Po)\d+((/\d+)?/\d+|\d+)$") # Gi1/0/1, Te1/0/1, Po1, Gi1/0/10, Po12
@@ -366,11 +385,11 @@ def parse_vlan_info(output_show_vlan):
     return {}
 
 def display_vlan_names(switch_ip, username, password):
-    print(f"\nFetching VLAN information from {switch_ip}...")
+    print(f"\n{BLUE}Fetching VLAN configuration from {get_switch_identifier(switch_ip, switch_details_by_ip)}...{RESET}")
     output, error = exec_ssh_command("show vlan", switch_ip, username, password)
     if error:
-        print(f"Error fetching VLANs from {switch_ip}: {error}")
-        return
+        print(f"{RED}Error fetching VLANs from {get_switch_identifier(switch_ip, switch_details_by_ip)}: {error}{RESET}")
+        return # Exit the function on error
 
     if not output or output.strip() == "" :
         print(f"No output received for 'show vlan' from {switch_ip}.")
@@ -405,15 +424,15 @@ def parse_port_vlan_config(output_show_int_switchport):
     return config
 
 def configure_vlans_on_port(switch_ip, port_id, username, password):
-    print(f"\nConfiguring VLANs for port {port_id} on switch {switch_ip}.")
+    print(f"\n{BLUE}Configuring VLANs for port {port_id} on switch {get_switch_identifier(switch_ip, switch_details_by_ip)}.{RESET}")
 
-    print(f"Fetching current configuration for port {port_id}...")
+    print(f"{BLUE}Fetching current configuration for port {port_id}...{RESET}")
     current_config_output, error = exec_ssh_command(f"show interfaces switchport {port_id}", switch_ip, username, password)
     if error:
-        print(f"Error fetching current port configuration: {error}")
+        print(f"{RED}Error fetching current port configuration: {error}{RESET}")
         return
     if not current_config_output:
-        print(f"Could not fetch current configuration for port {port_id}.")
+        print(f"{RED}Could not fetch current configuration for port {port_id}.{RESET}")
         return
 
     current_vlans = parse_port_vlan_config(current_config_output)
@@ -427,14 +446,14 @@ def configure_vlans_on_port(switch_ip, port_id, username, password):
         new_pvid_str = input("Enter new PVID (this will be the untagged VLAN ID, e.g., 1010, press Enter to skip PVID change): ").strip()
         if not new_pvid_str:
             new_pvid = None
-            print("PVID/Untagged VLAN configuration will not be changed, or will be derived if clearing all.")
+            print(f"{BLUE}PVID/Untagged VLAN configuration will not be changed, or will be derived if clearing all.{RESET}")
             break
         if new_pvid_str.isdigit() and 1 <= int(new_pvid_str) <= 4094:
             new_pvid = new_pvid_str
             break
         else:
-            print("Invalid VLAN ID. Must be a number between 1 and 4094.")
-
+            print(f"{RED}Invalid VLAN ID. Must be a number between 1 and 4094.{RESET}")
+            
     new_tagged_vlans_list = []
     while True:
         new_tagged_vlans_str = input("Enter new Tagged VLAN IDs (comma-separated, e.g., 1020,1030, press Enter for none/to clear existing): ").strip()
@@ -449,12 +468,12 @@ def configure_vlans_on_port(switch_ip, port_id, username, password):
             if v_id.isdigit() and 1 <= int(v_id) <= 4094: # Check only for valid range
                 if new_pvid and v_id == new_pvid:
                     print(f"Error: VLAN {v_id} cannot be both untagged (as PVID) and explicitly tagged.")
-                    valid_tagged_input = False
+                    valid_tagged_input = False # Mark as invalid input
                     break
                 temp_tagged_list.append(v_id)
             else:
-                print(f"Invalid VLAN ID '{v_id}' in tagged list. Must be a number between 1 and 4094.")
-                valid_tagged_input = False
+                print(f"{RED}Invalid VLAN ID '{v_id}' in tagged list. Must be a number between 1 and 4094.{RESET}")
+                valid_tagged_input = False # Mark as invalid input
                 break
         if valid_tagged_input:
             new_tagged_vlans_list = temp_tagged_list
@@ -464,10 +483,10 @@ def configure_vlans_on_port(switch_ip, port_id, username, password):
     if new_pvid is None and not new_tagged_vlans_str: # User skipped PVID and entered nothing for tagged
         confirm_clear = input("No new PVID and no new tagged VLANs specified. This might clear existing VLANs or set to default. Continue? [y|n]: ").lower()
         if confirm_clear not in ['y', 'yes']:
-            print("Configuration aborted by user.")
+            print(f"{BLUE}Configuration aborted by user.{RESET}")
             return
         if not new_pvid and not new_tagged_vlans_list: # If user wants to clear, PVID 1 is a safe default
-            print("Setting PVID to 1 and removing other VLANs as no specific configuration was provided.")
+            print(f"{BLUE}Setting PVID to 1 and removing other VLANs as no specific configuration was provided.{RESET}")
             new_pvid = "1"
 
     commands = []
@@ -496,21 +515,21 @@ def configure_vlans_on_port(switch_ip, port_id, username, password):
         commands.append(f"switchport general allowed vlan remove {v_rem}")
 
     if not commands[2:]: # Only interface and switchport mode general
-        print("No effective configuration changes to apply based on input.")
+        print(f"{BLUE}No effective configuration changes to apply based on input.{RESET}")
         return
 
     print("\nThe following commands will be sent:")
     for cmd in commands: print(f"  {cmd}")
 
     confirm = input("Proceed with these changes? [y|n]: ").lower()
-    if confirm == 'y' or confirm == 'yes':
-        print("Applying configuration...")
+    if confirm in ['y', 'yes']:
+        print(f"{BLUE}Applying configuration...{RESET}")
         output, error = exec_ssh_config_commands(commands, switch_ip, username, password)
         if error:
-            print(f"Error during configuration: {error}")
+            print(f"{RED}Error during configuration: {error}{RESET}")
             if "debug" in sys.argv or output: print(f"Full switch output:\n{output}")
         else:
-            print("Configuration applied successfully.")
+            print(f"{GREEN}Configuration applied successfully.{RESET}")
             if "debug" in sys.argv and output: print(f"Full switch output (debug):\n{output}")
             print("\nFetching updated port configuration...")
             updated_config_output, err = exec_ssh_command(f"show interfaces switchport {port_id}", switch_ip, username, password)
@@ -519,7 +538,7 @@ def configure_vlans_on_port(switch_ip, port_id, username, password):
                 print("Updated configuration:")
                 print(updated_config_output)
     else:
-        print("Configuration aborted by user.")
+        print(f"{BLUE}Configuration aborted by user.{RESET}")
 
 
 def mac_search_workflow(switch_IPs, username, password):
@@ -530,10 +549,10 @@ def mac_search_workflow(switch_IPs, username, password):
         if not switch_IPs:
             print("No switches defined for testing.")
             return
-        print(f"{switch_IPs[0]} will now be queried for its MAC-address-table. This can take some time!")
+        print(f"{BLUE}{get_switch_identifier(switch_IPs[0], switch_details_by_ip)} will now be queried for its MAC-address-table. This can take some time!{RESET}")
         ssh_test_output, ssh_test_error = ssh_test(switch_IPs[0], username, password)
         if ssh_test_error:
-            print(f"Error during ssh_test: {ssh_test_error}")
+            print(f"{RED}Error during ssh_test: {ssh_test_error}{RESET}")
         return
 
     formatted_mac = format_mac_address(mac)
@@ -545,7 +564,7 @@ def mac_search_workflow(switch_IPs, username, password):
     switches_checked = []
     for ip in switch_IPs:
         print(f"Checking switch {ip}...")
-        switches_checked.append(ip)
+        switches_checked.append(get_switch_identifier(ip, switch_details_by_ip)) # Store formatted identifier
         command = f"show mac address-table address {formatted_mac}"
         output, error = exec_ssh_command(command, ip, username, password)
 
@@ -558,7 +577,7 @@ def mac_search_workflow(switch_IPs, username, password):
                "dynamic" in output.lower().split() and \
                port_on_switch and port_on_switch.startswith("Gi"):
 
-                print(f"\n>>> {formatted_mac} was found on switch {ip} on port {port_on_switch}.")
+                print(f"\n{GREEN}>>> {formatted_mac} was found on switch {get_switch_identifier(ip, switch_details_by_ip)} on port {port_on_switch}.{RESET}")
                 print(f"Relevant output line(s):")
                 for line in output.splitlines():
                     if formatted_mac.lower() in line.lower() and port_on_switch in line:
@@ -569,7 +588,7 @@ def mac_search_workflow(switch_IPs, username, password):
                 if answer == "y" or answer == "yes":
                     port_config_cmd = f"show interfaces switchport {port_on_switch}"
                     cfg_output, cfg_error = exec_ssh_command(port_config_cmd, ip, username, password)
-                    if cfg_error:
+                    if cfg_error: # Use original error message as it's already formatted
                         print(f"Error fetching port configuration from {ip}: {cfg_error}")
                     else:
                         print(cfg_output)
@@ -582,10 +601,10 @@ def mac_search_workflow(switch_IPs, username, password):
                     return # Found on last switch, end search
 
             elif "debug" in sys.argv and output:
-                print(f"Debug output for switch {ip} (MAC {formatted_mac}):\n{output}")
+                print(f"{BLUE}Debug output for switch {get_switch_identifier(ip, switch_details_by_ip)} (MAC {formatted_mac}):{RESET}\n{output}")
 
     if not device_found:
-        print(f"\n{formatted_mac} was not found directly connected to a Gi port on the checked switches.")
+        print(f"\n{RED}{formatted_mac} was not found directly connected to a Gi port on the checked switches.{RESET}")
     print(f"Switches checked: {', '.join(switches_checked)}")
 
 
@@ -625,8 +644,12 @@ def main_menu(switch_IPs_list, user, passwd):
         elif choice == '2':
             if not switch_IPs_list: print("No switches defined."); continue
             target_ip = input(f"Enter IP of the switch to configure (available: {', '.join(switch_IPs_list)}): ").strip()
+            # Find the switch details for the prompt
+            switch_info_for_prompt = switch_details_by_ip.get(target_ip)
             if target_ip not in switch_IPs_list:
                 print(f"Invalid switch IP. Please choose from the predefined list or add to script.")
+                # Optionally print available switches again
+                display_switch_inventory(switch_inventory)
                 continue
             port_str = input("Enter port to configure (e.g., Gi1/0/8): ").strip()
             if not port_id_pattern.match(port_str):
@@ -636,8 +659,12 @@ def main_menu(switch_IPs_list, user, passwd):
         elif choice == '3':
             if not switch_IPs_list: print("No switches defined."); continue
             target_ip_show = input(f"Enter IP of the switch to show VLANs from (available: {', '.join(switch_IPs_list)}): ").strip()
+            # Find the switch details for the prompt
+            switch_info_for_prompt_show = switch_details_by_ip.get(target_ip_show)
             if target_ip_show not in switch_IPs_list:
                 print(f"Invalid switch IP. Please choose from the predefined list or add to script.")
+                # Optionally print available switches again
+                display_switch_inventory(switch_inventory)
                 continue
             display_vlan_names(target_ip_show, user, passwd)
         elif choice == '4':
@@ -676,6 +703,10 @@ if __name__ == "__main__":
 
     # get password once from user and store encrypted for runtime
     password = getpass.getpass(prompt='Enter SSH password for switches: ')
+
+    # Create a dictionary for quick lookup of switch details by IP
+    # Filter out entries with 'no IP set'
+    switch_details_by_ip = {s['ip']: s for s in switch_inventory if s.get('ip') and s['ip'] != 'no IP set'}
 
     main_menu(switch_IPs, username, password)
 
