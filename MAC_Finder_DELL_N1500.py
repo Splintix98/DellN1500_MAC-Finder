@@ -361,32 +361,9 @@ def parse_vlan_info(output_show_vlan):
     # Regex to find VLAN ID at the start of a line (only digits followed by space)
     vlan_id_line_re = re.compile(r"^\s*(\d+)\s+")
 
-    # Process data lines starting from the line after the separator
-    for i in range(data_lines_start_index, len(lines)):
-        line = lines[i]
-        # Check if the line starts with a VLAN ID
-        match_id = vlan_id_line_re.match(line)
-
-        if match_id:
-            # This line starts a new VLAN entry
-            vlan_id_str = match_id.group(1)
-            try:
-                vlan_id = int(vlan_id_str)
-            except ValueError:
-                # Should not happen with the regex, but as a safeguard
-                continue
-
-            # Extract the name using the determined column indices
-            # The name is between the end of the VLAN ID part and the start of the Ports column
-            # Ensure slicing doesn't go beyond the line length
-            name_end_index = min(len(line), ports_start_index)
-            vlan_name = line[name_start_index:name_end_index].strip()
-
-            vlans[vlan_id] = vlan_name
-        # else: This line does not start with a VLAN ID, assume it's a continuation
-        # of the Ports list from the previous VLAN entry. Ignore for ID/Name mapping.
-
-    return vlans
+    # Simplified: Return empty dict as parsing is too complex/unreliable for now.
+    # The display_vlan_names function will show raw output.
+    return {}
 
 def display_vlan_names(switch_ip, username, password):
     print(f"\nFetching VLAN information from {switch_ip}...")
@@ -395,23 +372,11 @@ def display_vlan_names(switch_ip, username, password):
         print(f"Error fetching VLANs from {switch_ip}: {error}")
         return
 
-    if not output or output.strip() == "":
+    if not output or output.strip() == "" :
         print(f"No output received for 'show vlan' from {switch_ip}.")
-        if "debug" in sys.argv:
-             print("Raw output from 'show vlan':\n", output)
-        return
-
-    vlan_info = parse_vlan_info(output)
-    if not vlan_info:
-        print("Could not parse VLAN information or no VLANs found.")
-        if "debug" in sys.argv:
-            print("Raw output from 'show vlan':\n", output)
-            return
-
-    print("\nAvailable VLANs on the switch:")
-    for vlan_id, name in sorted(vlan_info.items()):
-        print(f"  ID: {vlan_id:<5} Name: {name}")
-    print("")
+    print(f"\n--- VLAN Configuration on {switch_ip} ---")
+    print(output)
+    print(f"--- End of VLAN Configuration ---")
 
 def parse_port_vlan_config(output_show_int_switchport):
     config = {
@@ -481,7 +446,7 @@ def configure_vlans_on_port(switch_ip, port_id, username, password):
         valid_tagged_input = True
         for v_id_str in new_tagged_vlans_str.split(','):
             v_id = v_id_str.strip()
-            if v_id.isdigit() and 1 <= int(v_id) <= 4094:
+            if v_id.isdigit() and 1 <= int(v_id) <= 4094: # Check only for valid range
                 if new_pvid and v_id == new_pvid:
                     print(f"Error: VLAN {v_id} cannot be both untagged (as PVID) and explicitly tagged.")
                     valid_tagged_input = False
