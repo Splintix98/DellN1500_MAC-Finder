@@ -4,6 +4,7 @@ import getpass
 import sys
 import re
 import os # Import os module to check for Windows and potentially enable ANSI codes
+from switch_config import switch_inventory # Import switch_inventory from config file
 
 
 ############ TODO ############
@@ -677,28 +678,7 @@ def main_menu(switch_IPs_list, user, passwd):
         print("--------------------------------------------------")
 
 
-# Define switch inventory data
-switch_inventory = [
-    {'ip': '192.168.23.31', 'location': 'Serverraum', 'rack_details': '1', 'model': 'Dell N1548P', 'notes': ''},
-    {'ip': '192.168.23.32', 'location': 'Serverraum', 'rack_details': '2', 'model': 'Dell N1548P', 'notes': ''},
-    {'ip': '192.168.23.33', 'location': 'Serverraum', 'rack_details': '3', 'model': 'Dell N1548P', 'notes': ''},
-    {'ip': '192.168.23.34', 'location': 'Serverraum', 'rack_details': '4', 'model': 'Dell N1548P', 'notes': ''},
-    {'ip': '192.168.23.35', 'location': 'Serverraum', 'rack_details': '5', 'model': 'Dell N1548P', 'notes': ''},
-    {'ip': '192.168.23.38', 'location': 'Verwaltung', 'rack_details': 'Heizungsraum', 'model': 'Dell N1524P', 'notes': ''},
-    {'ip': '192.168.23.39', 'location': 'Academy', 'rack_details': 'Medienraum EG', 'model': 'Dell N1548P', 'notes': ''},
-    {'ip': '192.168.23.40', 'location': 'Fertigung', 'rack_details': 'Verteiler 1.1', 'model': 'Dell N1548P', 'notes': 'oberer Switch Dispo-Büro'},
-    {'ip': '192.168.23.41', 'location': 'Fertigung', 'rack_details': 'Verteiler 1.2', 'model': 'Dell N1548P', 'notes': 'unterer Switch Dispo-Büro'},
-    {'ip': '192.168.23.42', 'location': 'Fertigung', 'rack_details': 'Verteiler 2', 'model': 'Dell N1548P', 'notes': 'hinter der Beschichtung südl. Aussenwand'},
-    {'ip': '192.168.23.43', 'location': 'Fertigung', 'rack_details': 'Verteiler 3.1', 'model': 'Dell N1548P', 'notes': 'Versand-Halle Mitte'},
-    {'ip': 'no IP set', 'location': 'Fertigung', 'rack_details': 'Verteiler 3.2', 'model': 'Dell N1524P', 'notes': 'Versand-Halle Mitte'},
-    {'ip': '192.168.23.44', 'location': 'Fertigung', 'rack_details': 'Verteiler 4', 'model': 'Dell N1548P', 'notes': 'Magazin unter der Decke'},
-    {'ip': '192.168.23.49', 'location': 'Fertigung', 'rack_details': 'SmartBunker', 'model': 'Dell N1548P', 'notes': 'SmartBunker'},
-]
-
 if __name__ == "__main__":
-    # define your switches that you want to be checked here as a string array
-    # die .41 ist der zweite Switch im Dispo-Stack und muss nicht separat geprüft werden!
-    switch_IPs = ["192.168.23.31", "192.168.23.32", "192.168.23.33", "192.168.23.34", "192.168.23.35", "192.168.23.38", "192.168.23.39", "192.168.23.40", "192.168.23.42", "192.168.23.43", "192.168.23.44"]
     username = "admin"
 
     # get password once from user and store encrypted for runtime
@@ -706,9 +686,15 @@ if __name__ == "__main__":
 
     # Create a dictionary for quick lookup of switch details by IP
     # Filter out entries with 'no IP set'
-    switch_details_by_ip = {s['ip']: s for s in switch_inventory if s.get('ip') and s['ip'] != 'no IP set'}
+    # Also create a list of IPs to be queried
+    switch_details_by_ip = {}
+    queryable_switch_ips = []
+    for s_info in switch_inventory:
+        if s_info.get('ip') and s_info['ip'] != 'no IP set':
+            switch_details_by_ip[s_info['ip']] = s_info
+            queryable_switch_ips.append(s_info['ip'])
 
-    main_menu(switch_IPs, username, password)
+    main_menu(queryable_switch_ips, username, password)
 
 
 """
